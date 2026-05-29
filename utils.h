@@ -115,3 +115,18 @@ Flist lsdir(const char *path, const char *filter) {
 
     return list;
 }
+
+/*
+char* get_formating_music_time(ma_sound* sound, ma_uint64 total_music_time){
+    ma_format fmt = ma_sound_get_data_format(sound); 
+    ma_uint32 sr = fmt.sampleRate;
+    double seconds = (double)total_music_time / (double)sr;
+
+    int hrs = (int)(seconds / 3600.0);
+    int mins = (int)((seconds - hrs*3600.0) / 60.0);
+    int secs = (int)(seconds - hrs*3600.0 - mins*60.0);
+
+    char timestr[64];
+    snprintf(timestr, sizeof(timestr), "%02d:%02d:%02d", hrs, mins, secs);
+    return timestr;
+}*/

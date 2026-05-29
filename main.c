@@ -9,13 +9,15 @@
 #include <dirent.h>
 #include <stdbool.h>
 
-#include "utils.h"
 #include "miniaudio/miniaudio.c"
+#include "utils.h"
+
 
 int main(void) {
     int cursor = 0;
     int val = 100;
     char* played = "none";
+    bool pause = false;
     char c[3];
 
     struct winsize w; // для размера терминала
@@ -48,12 +50,14 @@ int main(void) {
         FD_SET(STDIN_FILENO, &readfds);
         struct timeval tv = {0, 50000}; // 50 ms timeout — неблокирующее ожидание
         int rv = select(STDIN_FILENO+1, &readfds, NULL, NULL, &tv); // следит за множествами файловых дескрипторов
+        ma_sound_get_cursor_in_pcm_frames(sound, &saved_cursor);
         
         printf("\e[1;1H\e[2J");
 
         if (rv > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
             ssize_t n = read(STDIN_FILENO, &c, 3);
             if (n > 0) {
+                if (c[0] == EOF) { usleep(10000); continue; }
                 if ((size_t)n+1 >= 3){
                     // выбор трека 
                     if (c[0] == 0x1B && c[1] == '[' && c[2] == 'A'){
@@ -76,8 +80,13 @@ int main(void) {
                 } else {
                     if (c[0] == '\n' || c[0] == '\r'){
                         played = file_list[cursor];
+                        if (ma_sound_get_length_in_pcm_frames(sound, &total_music_time) != MA_SUCCESS) {
+                            fprintf(stderr, "\nFailed to get total frames music\n");
+                            return 1;
+                        }
+                        
                         if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, sound) != MA_SUCCESS) {
-                            fprintf(stderr, "Failed to load sound\n");
+                            fprintf(stderr, "\nFailed to load sound\n");
                             free(sound);
                             ma_engine_uninit(&engine);
                             return 4;
@@ -89,11 +98,27 @@ int main(void) {
                         printf("\e[1;1H\e[2J");
                         return 0;
                     }
+                    if (c[0] == ' ') {
+                        // seconds — double позиция в секундах 
+                        double seconds = saved_cursor;
+                        ma_uint64 sampleRate = 48000; // запасной вариант; лучше получить реальный sampleRate 
+                        ma_uint64 frames = (ma_uint64)(seconds * (double)sampleRate);
+
+                        ma_sound_set_start_time_in_pcm_frames(sound, frames);
+
+                            if (pause){
+                                ma_sound_stop(sound);
+                                pause = false;
+                            } else {
+                                ma_sound_start(sound);
+                                pause = true;
+                            }
+                    }
                 }
                 //printf("Key: %c%c%c (0x%02x)\n", c[0], c[1], c[2], (unsigned char)c[0]);
             }
         }
-        
+        char *pause_message = "playing";
         printf("%ld files", files_num);
         for (size_t i = 0; file_list[i] != NULL; i++) {
             if (i < w.ws_col - 1){
@@ -103,9 +128,14 @@ int main(void) {
                 else printf("  %s\n", file_list[i]);
             }
             printf("\e[%d;%dH", w.ws_col-1, 1);
-            printf("plays: %s | [---------------] val:%d", played, val);
+
+            if (pause){
+                pause_message = "pause";
+            } else 
+                pause_message = "playing";
+
+            printf("plays: %s | [---------------] val:%d        %s", played, val, pause_message);
             fflush(stdout);
-            //usleep(5000);
         }
     }
 
