@@ -32,14 +32,17 @@ int main(void) {
     size_t max_len = list.max_len;
     size_t files_num = list.num_files;
 
-    ma_uint64 saved_cursor, total_music_time;
+    ma_uint64 saved_cursor = 0, total_music_time = 0;
     ma_result result;
     ma_engine engine;
-    ma_sound *sound = malloc(sizeof(ma_sound));
+    ma_sound sound;
+    double secund = 0;
+    double total_music_time_second = 0;
+    ma_uint64 sampleRate = 48000; // это затычка, поже нужно сделать получение реального 
 
     result = ma_engine_init(NULL, &engine);
     if (result != MA_SUCCESS) {
-        fprintf(stderr, "error init ma engine");
+        fprintf(stderr, "\nerror init ma engine [%i]\n", result);
         return 1;
     }
 
@@ -50,7 +53,11 @@ int main(void) {
         FD_SET(STDIN_FILENO, &readfds);
         struct timeval tv = {0, 50000}; // 50 ms timeout — неблокирующее ожидание
         int rv = select(STDIN_FILENO+1, &readfds, NULL, NULL, &tv); // следит за множествами файловых дескрипторов
-        ma_sound_get_cursor_in_pcm_frames(sound, &saved_cursor);
+
+        if (total_music_time != 0){
+            ma_sound_get_cursor_in_pcm_frames(&sound, &saved_cursor);
+            secund = ((double)saved_cursor / (double)sampleRate);
+        }
         
         printf("\e[1;1H\e[2J");
 
@@ -80,45 +87,48 @@ int main(void) {
                 } else {
                     if (c[0] == '\n' || c[0] == '\r'){
                         played = file_list[cursor];
-                        if (ma_sound_get_length_in_pcm_frames(sound, &total_music_time) != MA_SUCCESS) {
-                            fprintf(stderr, "\nFailed to get total frames music\n");
-                            return 1;
-                        }
                         
-                        if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, sound) != MA_SUCCESS) {
+                        if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, &sound) != MA_SUCCESS) {
                             fprintf(stderr, "\nFailed to load sound\n");
-                            free(sound);
                             ma_engine_uninit(&engine);
                             return 4;
                         }
+                        
 
-                        ma_sound_start(sound);
+                        result = ma_sound_get_length_in_pcm_frames(&sound, &total_music_time);
+                        total_music_time_second = (double)total_music_time / (double)sampleRate;
+                        if (result != MA_SUCCESS) {
+                            fprintf(stderr, "\nFailed to get total frames music [%i]\n", result);
+                            return 1;
+                        }
+                        secund = 0;
+                        saved_cursor = 0;
+
+                        ma_sound_start(&sound);
                     }
                     if (c[0] == 'q') {
                         printf("\e[1;1H\e[2J");
                         return 0;
                     }
                     if (c[0] == ' ') {
-                        // seconds — double позиция в секундах 
-                        double seconds = saved_cursor;
-                        ma_uint64 sampleRate = 48000; // запасной вариант; лучше получить реальный sampleRate 
-                        ma_uint64 frames = (ma_uint64)(seconds * (double)sampleRate);
+                        ma_sound_set_start_time_in_pcm_frames(&sound, saved_cursor);
 
-                        ma_sound_set_start_time_in_pcm_frames(sound, frames);
-
-                            if (pause){
-                                ma_sound_stop(sound);
-                                pause = false;
-                            } else {
-                                ma_sound_start(sound);
-                                pause = true;
-                            }
+                        if (pause){
+                            ma_sound_start(&sound);
+                            pause = false;
+                        } else {
+                            ma_sound_stop(&sound);
+                            pause = true;
+                        }
                     }
                 }
                 //printf("Key: %c%c%c (0x%02x)\n", c[0], c[1], c[2], (unsigned char)c[0]);
             }
         }
         char *pause_message = "playing";
+        char progress_bar[] = "               "; //прогресс бар из 15 сигментов 
+        unsigned int progress = 0;
+        
         printf("%ld files", files_num);
         for (size_t i = 0; file_list[i] != NULL; i++) {
             if (i < w.ws_col - 1){
@@ -129,12 +139,23 @@ int main(void) {
             }
             printf("\e[%d;%dH", w.ws_col-1, 1);
 
-            if (pause){
+            if (pause && played != "none"){
                 pause_message = "pause";
-            } else 
+            } else if (played != "none"){  
                 pause_message = "playing";
+            } else {
+                pause_message = "";
+            }
 
-            printf("plays: %s | [---------------] val:%d        %s", played, val, pause_message);
+            if (played != "none") { 
+                progress = ((total_music_time_second / 100) * secund) ;
+                //printf("\n%d", progress);
+                for (int i = 0; i != (progress / 100) * 15; i++){
+                    progress_bar[i] = '-';
+                }
+            }
+
+            printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
             fflush(stdout);
         }
     }
