@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <stdbool.h>
+#include <math.h>
 
 #include "miniaudio/miniaudio.c"
 #include "utils.h"
@@ -20,7 +21,7 @@ int main(void) {
     bool pause = false;
     char c[3];
 
-    struct winsize w; // для размера терминала
+    struct winsize w; // для размера терминалаb
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w); // w.ws_row количество синволов; w.ws_col кол во колонок
 
     Flist list = lsdir(".", ".mp3");
@@ -36,8 +37,7 @@ int main(void) {
     ma_result result;
     ma_engine engine;
     ma_sound sound;
-    double secund = 0;
-    double total_music_time_second = 0;
+    double secund = 0, total_music_time_second = 0;
     ma_uint64 sampleRate = 48000; // это затычка, поже нужно сделать получение реального 
 
     result = ma_engine_init(NULL, &engine);
@@ -86,15 +86,20 @@ int main(void) {
                     }
                 } else {
                     if (c[0] == '\n' || c[0] == '\r'){
+                        if (played != "none"){ 
+                            ma_sound_stop(&sound);
+                            ma_sound_set_start_time_in_pcm_frames(&sound, 0); // при запуске другого трека переводимся на 0
+                            ma_sound_uninit(&sound);
+                        }
+
                         played = file_list[cursor];
-                        
+
                         if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, &sound) != MA_SUCCESS) {
                             fprintf(stderr, "\nFailed to load sound\n");
                             ma_engine_uninit(&engine);
                             return 4;
                         }
                         
-
                         result = ma_sound_get_length_in_pcm_frames(&sound, &total_music_time);
                         total_music_time_second = (double)total_music_time / (double)sampleRate;
                         if (result != MA_SUCCESS) {
@@ -127,7 +132,7 @@ int main(void) {
         }
         char *pause_message = "playing";
         char progress_bar[] = "               "; //прогресс бар из 15 сигментов 
-        unsigned int progress = 0;
+        short percent = 0;
         
         printf("%ld files", files_num);
         for (size_t i = 0; file_list[i] != NULL; i++) {
@@ -148,11 +153,12 @@ int main(void) {
             }
 
             if (played != "none") { 
-                progress = ((total_music_time_second / 100) * secund) ;
-                //printf("\n%d", progress);
-                for (int i = 0; i != (progress / 100) * 15; i++){
-                    progress_bar[i] = '-';
-                }
+                percent = (((double)secund / (double)total_music_time_second) * 100);
+                if (percent > 100) percent = 100;
+                if (percent < 0) percent = 0;
+                
+                //printf("\nbar:%ld procent:%ld total:%f\n", (percent / 100) * 15, percent, total_music_time_second);
+                progress_bar[(int)round(0.15 * percent)] = '-';
             }
 
             printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
