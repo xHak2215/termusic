@@ -79,10 +79,14 @@ int main(void) {
                     if ((c[0] == 0x1B && c[1] == '[' && c[2] == 'D') || c[0] == '+'){
                         if (val < 100)
                             val++;
+                        if (played != "none")
+                            ma_sound_set_volume(&sound, (val / 0.1) / 1000);
                     }
                     if ((c[0] == 0x1B && c[1] == '[' && c[2] == 'C') || c[0] == '-'){
                         if (val > 0) 
                             val--;
+                        if (played != "none")
+                            ma_sound_set_volume(&sound, (val / 0.1) / 1000);
                     }
                 } else {
                     if (c[0] == '\n' || c[0] == '\r'){
@@ -109,6 +113,7 @@ int main(void) {
                         secund = 0;
                         saved_cursor = 0;
 
+                        ma_sound_set_volume(&sound, (val / 0.1) / 1000);
                         ma_sound_start(&sound);
                     }
                     if (c[0] == 'q') {
@@ -141,6 +146,8 @@ int main(void) {
                 //printf("\e[%zu;%dH", i+1, 1);
                 if ((int)i == cursor) printf("> %s\n", file_list[i]);
                 else printf("  %s\n", file_list[i]);
+            } else {
+                printf("> %s\n", file_list[cursor]);
             }
             printf("\e[%d;%dH", w.ws_col-1, 1);
 
@@ -158,7 +165,7 @@ int main(void) {
                 if (percent < 0) percent = 0;
                 
                 //printf("\nbar:%ld procent:%ld total:%f\n", (percent / 100) * 15, percent, total_music_time_second);
-                progress_bar[(int)round(0.15 * percent)] = '-';
+                progress_bar[(int)round(0.14 * percent)] = '-';
             }
 
             printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
