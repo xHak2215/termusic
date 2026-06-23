@@ -13,6 +13,7 @@
 #include "miniaudio/miniaudio.c"
 #include "utils.h"
 
+#define PROGRESS_BAR_SIZE 15
 
 int main(void) {
     int cursor = 0;
@@ -38,12 +39,50 @@ int main(void) {
     ma_engine engine;
     ma_sound sound;
     double secund = 0, total_music_time_second = 0;
+    int temp_secund = 0;
     ma_uint64 sampleRate = 48000; // это затычка, поже нужно сделать получение реального 
+
+    char progress_bar[PROGRESS_BAR_SIZE] = "               "; 
+    short percent = 0;
 
     result = ma_engine_init(NULL, &engine);
     if (result != MA_SUCCESS) {
         fprintf(stderr, "\nerror init ma engine [%i]\n", result);
         return 1;
+    }
+
+    int start_music() {
+        if (played != "none") { 
+            ma_sound_stop(&sound);
+            ma_sound_set_start_time_in_pcm_frames(&sound, 0); // при запуске другого трека переводимся на 0
+            ma_sound_uninit(&sound);
+        }
+
+        played = file_list[cursor];
+
+        if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC, NULL, NULL, &sound) != MA_SUCCESS) {
+            fprintf(stderr, "\nFailed to load sound\n");
+            ma_engine_uninit(&engine);
+            return 4;
+        }
+
+        result = ma_sound_get_length_in_pcm_frames(&sound, &total_music_time);
+        total_music_time_second = (double)total_music_time / (double)sampleRate;
+        if (result != MA_SUCCESS) {
+            fprintf(stderr, "\nFailed to get total frames music [%i]\n", result);
+            return 1;
+        }
+        // обнуление перед воспроизведением
+
+        for (size_t i =0; i == PROGRESS_BAR_SIZE; i++){
+            progress_bar[i] = ' ';
+        }
+        percent = 0;
+        secund = 0;
+        saved_cursor = 0;
+
+        ma_sound_set_volume(&sound, (val / 0.1) / 1000);
+        ma_sound_start(&sound);
     }
 
     enable_raw_mode();
@@ -90,31 +129,7 @@ int main(void) {
                     }
                 } else {
                     if (c[0] == '\n' || c[0] == '\r'){
-                        if (played != "none"){ 
-                            ma_sound_stop(&sound);
-                            ma_sound_set_start_time_in_pcm_frames(&sound, 0); // при запуске другого трека переводимся на 0
-                            ma_sound_uninit(&sound);
-                        }
-
-                        played = file_list[cursor];
-
-                        if (ma_sound_init_from_file(&engine, played, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, &sound) != MA_SUCCESS) {
-                            fprintf(stderr, "\nFailed to load sound\n");
-                            ma_engine_uninit(&engine);
-                            return 4;
-                        }
-                        
-                        result = ma_sound_get_length_in_pcm_frames(&sound, &total_music_time);
-                        total_music_time_second = (double)total_music_time / (double)sampleRate;
-                        if (result != MA_SUCCESS) {
-                            fprintf(stderr, "\nFailed to get total frames music [%i]\n", result);
-                            return 1;
-                        }
-                        secund = 0;
-                        saved_cursor = 0;
-
-                        ma_sound_set_volume(&sound, (val / 0.1) / 1000);
-                        ma_sound_start(&sound);
+                        start_music();
                     }
                     if (c[0] == 'q') {
                         printf("\e[1;1H\e[2J");
@@ -136,9 +151,7 @@ int main(void) {
             }
         }
         char *pause_message = "playing";
-        char progress_bar[] = "               "; //прогресс бар из 15 сигментов 
-        short percent = 0;
-        
+
         printf("%ld files", files_num);
         for (size_t i = 0; file_list[i] != NULL; i++) {
             if (i < w.ws_col - 1){
@@ -164,13 +177,20 @@ int main(void) {
                 if (percent > 100) percent = 100;
                 if (percent < 0) percent = 0;
                 
-                //printf("\nbar:%ld procent:%ld total:%f\n", (percent / 100) * 15, percent, total_music_time_second);
                 progress_bar[(int)round(0.14 * percent)] = '-';
             }
+
+            if (secund >= total_music_time_second && total_music_time_second > 0 && secund > 0 && cursor < files_num-1) {
+                cursor++;
+                start_music();
+            }
+
+            //temp_secund = (int)secund;
 
             printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
             fflush(stdout);
         }
+          
     }
 
 
