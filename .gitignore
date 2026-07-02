@@ -1,6 +1,7 @@
 # test file
 *.mp3
-termusic
+*.wav
+./termusic
 
 # Prerequisites
 *.d

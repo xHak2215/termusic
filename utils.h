@@ -23,7 +23,7 @@ typedef struct file_list {
     size_t  max_len;
 } Flist;
 
-Flist lsdir(const char *path, const char *filter) {
+Flist lsdir(const char *path, const char *filter) {  // реалитзовать потдержку множества форматов 
     DIR *d = opendir(path);
     Flist list; 
     if (!d) return list;
@@ -43,7 +43,7 @@ Flist lsdir(const char *path, const char *filter) {
             continue;
 
         size_t len = strlen(entry->d_name);
-        
+
         filt = false;
         for (int i = len - 1, inx = len_filter - 1; i != len - len_filter; i--){
             //printf("i: %d inx: %d\n", i, inx);

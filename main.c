@@ -39,10 +39,9 @@ int main(void) {
     ma_engine engine;
     ma_sound sound;
     double secund = 0, total_music_time_second = 0;
-    int temp_secund = 0;
     ma_uint64 sampleRate = 48000; // это затычка, поже нужно сделать получение реального 
 
-    char progress_bar[PROGRESS_BAR_SIZE] = "               "; 
+    char progress_bar[PROGRESS_BAR_SIZE] = "               ";
     short percent = 0;
 
     result = ma_engine_init(NULL, &engine);
@@ -57,6 +56,9 @@ int main(void) {
             ma_sound_set_start_time_in_pcm_frames(&sound, 0); // при запуске другого трека переводимся на 0
             ma_sound_uninit(&sound);
         }
+
+        //ma_engine_config engineConfig = ma_engine_config_init();
+        //sampleRate = engineConfig.sampleRate;
 
         played = file_list[cursor];
 
@@ -74,7 +76,7 @@ int main(void) {
         }
         // обнуление перед воспроизведением
 
-        for (size_t i =0; i == PROGRESS_BAR_SIZE; i++){
+        for (size_t i = 0; i < PROGRESS_BAR_SIZE; i++){
             progress_bar[i] = ' ';
         }
         percent = 0;
@@ -86,6 +88,9 @@ int main(void) {
     }
 
     enable_raw_mode();
+
+    printf("\e[1;1H\e[2J");  
+
     while (1) {
         fd_set readfds;
         FD_ZERO(&readfds); // Очищаем и настраиваем множество дескрипторов
@@ -97,8 +102,6 @@ int main(void) {
             ma_sound_get_cursor_in_pcm_frames(&sound, &saved_cursor);
             secund = ((double)saved_cursor / (double)sampleRate);
         }
-        
-        printf("\e[1;1H\e[2J");
 
         if (rv > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
             ssize_t n = read(STDIN_FILENO, &c, 3);
@@ -133,7 +136,7 @@ int main(void) {
                     }
                     if (c[0] == 'q') {
                         printf("\e[1;1H\e[2J");
-                        return 0;
+                        break;
                     }
                     if (c[0] == ' ') {
                         ma_sound_set_start_time_in_pcm_frames(&sound, saved_cursor);
@@ -152,44 +155,54 @@ int main(void) {
         }
         char *pause_message = "playing";
 
-        printf("%ld files", files_num);
+        for (size_t i = 0; i <= w.ws_col; i++){
+            printf("\e[%d;%ldH ", w.ws_row, i);
+        }
+
+        if (pause && played != "none"){
+            pause_message = "pause";
+        } else if (played != "none"){  
+            pause_message = "playing";
+        } else {
+            pause_message = "";
+        }
+
+        printf("\e[%d;%dH", 0, 0);
+        printf("%ld files\n", files_num);
+
         for (size_t i = 0; file_list[i] != NULL; i++) {
             if (i < w.ws_col - 1){
-                printf("\e[%d;%dH", (unsigned int)i+2, 1);
-                //printf("\e[%zu;%dH", i+1, 1);
-                if ((int)i == cursor) printf("> %s\n", file_list[i]);
+                if (i == cursor) printf("> %s\n", file_list[i]);
                 else printf("  %s\n", file_list[i]);
-            } else {
-                printf("> %s\n", file_list[cursor]);
             }
-            printf("\e[%d;%dH", w.ws_col-1, 1);
+            //printf("\e[%d;%dH", w.ws_col-1, 1);
+        }
 
-            if (pause && played != "none"){
-                pause_message = "pause";
-            } else if (played != "none"){  
-                pause_message = "playing";
-            } else {
-                pause_message = "";
-            }
+        if (played != "none") { 
+            percent = (((double)secund / (double)total_music_time_second) * 100);
+            if (percent > 100) percent = 100;
+            if (percent < 0) percent = 0; 
+            unsigned short prog = (unsigned short)round(0.15 * percent);
 
-            if (played != "none") { 
-                percent = (((double)secund / (double)total_music_time_second) * 100);
-                if (percent > 100) percent = 100;
-                if (percent < 0) percent = 0;
-                
-                progress_bar[(int)round(0.14 * percent)] = '-';
-            }
+            //for (size_t i = 0; i < prog; i++) {
+            //    progress_bar[i] = '-';
+            //}
+            progress_bar[prog] = '-';
+        }
 
-            if (secund >= total_music_time_second && total_music_time_second > 0 && secund > 0 && cursor < files_num-1) {
+        if (secund >= total_music_time_second && total_music_time_second > 0 && secund > 0) {
+            if (cursor < files_num-1 && cursor != files_num-1){
                 cursor++;
                 start_music();
+            } else {
+                ma_sound_stop(&sound);
             }
-
-            //temp_secund = (int)secund;
-
-            printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
-            fflush(stdout);
         }
+
+        printf("\e[%d;%dH", w.ws_row, 0);
+        printf("plays: %s | %.1f [%s] val:%d        %s", played, secund, progress_bar, val, pause_message);
+        
+        fflush(stdout);
           
     }
 
