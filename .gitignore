@@ -1,7 +1,9 @@
 # test file
 *.mp3
 *.wav
-./termusic
+termusic
+
+.vscode
 
 # Prerequisites
 *.d
@@ -58,3 +60,4 @@ dkms.conf
 
 # debug information files
 *.dwo
+.vscode/branch-timer.json
